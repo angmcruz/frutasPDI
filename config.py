@@ -18,30 +18,30 @@ BACKGROUND_HSV_LOWER = (0, 0, 150)
 BACKGROUND_HSV_UPPER = (180, 60, 255)
 MORPH_KERNEL_SIZE = (7, 7)
 
-# MODULO 3 - Extracción de Características
-HIST_BINS = 32  # Número de bins para histogramas
+# MODULO 3 - Extracción de características
+HIST_BINS = 32  
 
-# Rangos de color HSV para clasificación de madurez de Banano (sin solapamiento)
+
 COLOR_RANGES_HSV = {
     "verde": (
-        (35, 40, 40),    # Verde claro / medio
-        (85, 255, 255)   # Verde oscuro
+        (35, 40, 40),    
+        (85, 255, 255)   
     ),
     "amarillo": (
-        (16, 40, 40),    # Amarillo claro
-        (34, 255, 255)   # Amarillo vibrante
+        (16, 40, 40),    
+        (34, 255, 255)   
     ),
     "naranja": (
-        (6, 40, 40),     # Naranja / Tono bronce (H: 6 a 15)
-        (15, 255, 255)   # Naranja oscuro
+        (6, 40, 40),     
+        (15, 255, 255)   
     ),
     "marron": (
-        (0, 30, 20),     # Marrón / Manchas oscuras (H: 0 a 5)
-        (5, 255, 160)    # Marrón oscuro
+        (0, 30, 20),     
+        (5, 255, 160)    
     )
 }
 
-# MODULO 4 - Clasificación de Madurez del Banano (Umbrales por Espacio de Color)
+# MODULO 4 
 BANANO_THRESHOLDS = {
     "HSV": {
         "INMADURO": {
@@ -60,28 +60,23 @@ BANANO_THRESHOLDS = {
             "HUE_TOLERANCIA": 35.0,
         },
     },
+    
     "RGB": {
-        "INMADURO": {
-            "PCT_G_MIN": 40.0,
-        },
         "SOBREMADURO": {
-            "PCT_R_MIN": 35.0,
-        },
-        "MADURO": {
-            "RATIO_RG_B": 1.5,
+            "PCT_B_MIN": 15.0,   
         },
     },
+    
     "LAB": {
         "INMADURO": {
-            "A_MAX": 80.0,
-            "B_MAX": 150.0,
+            "A_MAX": 118.0,      # a* < 118 => verde
         },
         "SOBREMADURO": {
-            "A_MIN": 120.0,
-            "B_MAX": 170.0,
+            "A_MIN": 136.0,      # a* >= 136 
+            "B_MAX": 175.0,      # y b* < 175 
         },
         "MADURO": {
-            "B_MIN": 150.0,
+            "B_REF": 150.0,      # amarillo
         },
     },
 }

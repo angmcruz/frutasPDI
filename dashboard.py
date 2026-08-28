@@ -22,6 +22,9 @@ from module3_feature_extraction import extraer_caracteristicas
 from module4_classification import clasificar_madurez_por_espacio
 import config
 
+ESPACIOS = ["RGB", "HSV", "LAB"]
+ESPACIO_OFICIAL = "HSV"   # espacio que decide el resultado principal (badge)
+
 # FIGMA
 BG        = "#efe9db"
 PANEL     = "#f5f0e4"
@@ -83,6 +86,7 @@ class DashboardGeneral:
         self.bbox = None
         self.caracteristicas = None
         self.resultado = None
+        self.resultados_por_espacio = {}
         self.metricas = None
         self.tab = "resultados"
 
@@ -228,7 +232,12 @@ class DashboardGeneral:
             self.roi = self.imagen_bgr[y:y + h, x:x + w]
             self.roi_mask = mascara[y:y + h, x:x + w]
             self.caracteristicas = extraer_caracteristicas(self.roi, self.roi_mask)
-            self.resultado = clasificar_madurez_por_espacio(self.caracteristicas, "HSV")
+            
+            self.resultados_por_espacio = {
+                e: clasificar_madurez_por_espacio(self.caracteristicas, e) for e in ESPACIOS
+            }
+            
+            self.resultado = self.resultados_por_espacio[ESPACIO_OFICIAL]
             c = self.caracteristicas
             self.metricas = {
                 "H": c["H_promedio"] * 2,
@@ -252,7 +261,9 @@ class DashboardGeneral:
         ])
         tabs = tk.Frame(self.cuerpo, bg=BG)
         tabs.pack(fill=tk.X, padx=20)
-        for clave, texto in [("resultados", "Resultados"), ("analisis", "Análisis de características")]:
+        for clave, texto in [("resultados", "Resultados"),
+                             ("comparacion", "Comparación de espacios"),
+                             ("analisis", "Análisis de características")]:
             activo = self.tab == clave
             t = tk.Label(tabs, text=texto, bg=BG,
                          fg=BROWN_DK if activo else MUTED,
@@ -268,7 +279,12 @@ class DashboardGeneral:
         if clave == self.tab or self.resultado is None:
             return
         self.tab = clave
-        self.mostrar_resultados() if clave == "resultados" else self.mostrar_analisis()
+        if clave == "resultados":
+            self.mostrar_resultados()
+        elif clave == "comparacion":
+            self.mostrar_comparacion()
+        else:
+            self.mostrar_analisis()
 
     #  RESULTADOS 
     def mostrar_resultados(self):
@@ -355,6 +371,69 @@ class DashboardGeneral:
         tkimg = ImageTk.PhotoImage(Image.fromarray(img))
         label.config(image=tkimg)
         label.image = tkimg
+
+    #  COMPARACION DE ESPACIOS
+    def mostrar_comparacion(self):
+        self._header_resultados("Comparación de espacios")
+        cont = tk.Frame(self.cuerpo, bg=BG)
+        cont.pack(fill=tk.BOTH, expand=True, padx=20, pady=(4, 10))
+
+        estados = [self.resultados_por_espacio[e]["estado"] for e in ESPACIOS]
+        coinciden = len(set(estados)) == 1
+        oficial = self.resultados_por_espacio[ESPACIO_OFICIAL]["estado"]
+        msg = (f"Los 3 espacios coinciden en «{oficial}»." if coinciden
+               else f"Los espacios discrepan. Resultado oficial (HSV): «{oficial}».")
+        tk.Label(cont, text=msg, bg=BG, fg=(GREEN_DK if coinciden else ORANGE),
+                 font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(0, 8))
+
+        fila = tk.Frame(cont, bg=BG)
+        fila.pack(fill=tk.BOTH, expand=True)
+        for i, esp in enumerate(ESPACIOS):
+            fila.grid_columnconfigure(i, weight=1, uniform="cmp")
+            self._tarjeta_espacio(fila, i, esp)
+
+    def _tarjeta_espacio(self, parent, col, espacio):
+        r = self.resultados_por_espacio[espacio]
+        estado = r["estado"]
+        acc, bg_suave, dark = ESTADO_COLOR.get(estado, (BROWN, PANEL, BROWN_DK))
+        oficial = espacio == ESPACIO_OFICIAL
+
+        card = tk.Frame(parent, bg=PANEL, relief=tk.SOLID, bd=1,
+                        highlightbackground=(BROWN if oficial else BORDER),
+                        highlightthickness=(2 if oficial else 1))
+        card.grid(row=0, column=col, sticky="nsew", padx=6, pady=4)
+
+        tk.Frame(card, bg=acc, height=4).pack(fill=tk.X)
+        cab = tk.Frame(card, bg=PANEL)
+        cab.pack(fill=tk.X, padx=12, pady=(10, 2))
+        tk.Label(cab, text=espacio, bg=PANEL, fg=TEXT,
+                 font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
+        if oficial:
+            tk.Label(cab, text="  oficial  ", bg=BROWN, fg="white",
+                     font=("Segoe UI", 8, "bold")).pack(side=tk.RIGHT)
+
+        tk.Label(card, text=estado, bg=PANEL, fg=dark,
+                 font=("Segoe UI", 15, "bold")).pack(anchor="w", padx=12, pady=(4, 0))
+
+        conf = float(r.get("confianza", 0) or 0)
+        tk.Label(card, text=f"Confianza: {conf:.1f}%", bg=PANEL, fg=MUTED,
+                 font=("Segoe UI", 9)).pack(anchor="w", padx=12, pady=(2, 4))
+        barra = tk.Canvas(card, height=12, bg="#e5ddc9", highlightthickness=0)
+        barra.pack(fill=tk.X, padx=12, pady=(0, 8))
+
+        def dibujar(_=None, c=barra, v=conf, col=acc):
+            c.delete("all")
+            w = c.winfo_width()
+            if w > 1:
+                c.create_rectangle(0, 0, max(2, w * min(v, 100) / 100), 12, fill=col, outline="")
+        barra.bind("<Configure>", dibujar)
+
+        tk.Frame(card, bg=BORDER, height=1).pack(fill=tk.X, padx=12, pady=(0, 6))
+        tk.Label(card, text="EVIDENCIA", bg=PANEL, fg=MUTED,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=12)
+        tk.Label(card, text=r.get("regla_activada", ""), bg=PANEL, fg=TEXT,
+                 font=("Consolas", 9), wraplength=230, justify="left").pack(
+                     anchor="w", padx=12, pady=(2, 12))
 
     # ANALASIS
     def mostrar_analisis(self):
@@ -485,6 +564,11 @@ class DashboardGeneral:
             "pct_verde": c.get("pct_verde", 0), "pct_amarillo": c.get("pct_amarillo", 0),
             "pct_naranja": c.get("pct_naranja", 0), "pct_marron": c.get("pct_marron", 0),
         }
+        # Comparacion de los tres espacios de color
+        for esp in ESPACIOS:
+            r = self.resultados_por_espacio.get(esp, {})
+            fila[f"estado_{esp}"] = r.get("estado", "")
+            fila[f"confianza_{esp}"] = r.get("confianza", "")
         nuevo = not os.path.exists(ruta)
         with open(ruta, "a", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=list(fila.keys()))
